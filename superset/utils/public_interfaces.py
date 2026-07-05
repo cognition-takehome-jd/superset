@@ -40,7 +40,7 @@ def compute_hash(obj: Callable[..., Any]) -> str:
 
 
 def compute_func_hash(function: Callable[..., Any]) -> str:
-    hashed = md5()  # noqa: S324
+    hashed = md5(usedforsecurity=False)
     hashed.update(str(signature(function)).encode())
     return b85encode(hashed.digest()).decode("utf-8")
 
