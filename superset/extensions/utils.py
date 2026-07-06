@@ -43,7 +43,7 @@ FRONTEND_REGEX = re.compile(r"^frontend/dist/([^/]+)$")
 BACKEND_REGEX = re.compile(r"^backend/src/(?!.*\.\.)(.+)$")
 
 
-class InMemoryLoader(importlib.abc.Loader):
+class InMemoryLoader(importlib.abc.InspectLoader):
     def __init__(
         self, module_name: str, source: str, is_package: bool, origin: str
     ) -> None:
@@ -52,6 +52,14 @@ class InMemoryLoader(importlib.abc.Loader):
         self.is_package = is_package
         self.origin = origin
 
+    def get_source(self, fullname: str) -> str:
+        if isinstance(self.source, bytes):
+            return self.source.decode("utf-8")
+        return self.source
+
+    def get_code(self, fullname: str) -> Any:
+        return compile(self.source, self.origin, "exec", dont_inherit=True)
+
     def exec_module(self, module: Any) -> None:
         module.__file__ = self.origin
         module.__package__ = (
@@ -59,9 +67,7 @@ class InMemoryLoader(importlib.abc.Loader):
         )
         if self.is_package:
             module.__path__ = []
-        # Compile with filename for proper tracebacks
-        code = compile(self.source, self.origin, "exec")
-        exec(code, module.__dict__)  # noqa: S102
+        super().exec_module(module)
 
 
 class InMemoryFinder(importlib.abc.MetaPathFinder):
