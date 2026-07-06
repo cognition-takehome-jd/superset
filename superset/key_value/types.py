@@ -16,6 +16,7 @@
 # under the License.
 from __future__ import annotations
 
+import io
 import json
 import pickle
 from abc import ABC, abstractmethod
@@ -80,12 +81,42 @@ class JsonKeyValueCodec(KeyValueCodec):
             raise KeyValueCodecDecodeException(str(ex)) from ex
 
 
+# Deserializing an untrusted pickle stream can execute arbitrary code, since the
+# stream can reference any importable callable (CWE-502). RestrictedUnpickler only
+# resolves a curated allowlist of safe, data-only types, which blocks code
+# execution while preserving round-tripping of the values Superset caches.
+SAFE_GLOBALS = frozenset(
+    {
+        ("builtins", "bytearray"),
+        ("builtins", "bytes"),
+        ("builtins", "complex"),
+        ("builtins", "frozenset"),
+        ("builtins", "set"),
+        ("datetime", "date"),
+        ("datetime", "datetime"),
+        ("datetime", "time"),
+        ("datetime", "timedelta"),
+        ("datetime", "timezone"),
+        ("uuid", "UUID"),
+    }
+)
+
+
+class RestrictedUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str) -> Any:
+        if (module, name) not in SAFE_GLOBALS:
+            raise pickle.UnpicklingError(
+                f"Unpickling of {module}.{name} is forbidden"
+            )
+        return super().find_class(module, name)
+
+
 class PickleKeyValueCodec(KeyValueCodec):
     def encode(self, value: dict[Any, Any]) -> bytes:
         return pickle.dumps(value)
 
     def decode(self, value: bytes) -> dict[Any, Any]:
-        return pickle.loads(value)  # noqa: S301
+        return RestrictedUnpickler(io.BytesIO(value)).load()
 
 
 class MarshmallowKeyValueCodec(JsonKeyValueCodec):
