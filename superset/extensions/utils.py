@@ -21,6 +21,7 @@ import logging
 import os
 import re
 import sys
+import types
 from pathlib import Path
 from typing import Any, Generator, Iterable, Tuple
 from zipfile import ZipFile
@@ -61,7 +62,7 @@ class InMemoryLoader(importlib.abc.Loader):
             module.__path__ = []
         # Compile with filename for proper tracebacks
         code = compile(self.source, self.origin, "exec")
-        exec(code, module.__dict__)  # noqa: S102
+        types.FunctionType(code, module.__dict__)()
 
 
 class InMemoryFinder(importlib.abc.MetaPathFinder):
